@@ -6,7 +6,7 @@ set -euo pipefail
 
 UPSTREAM=${1:-upstream}
 DATE=$(date +%Y%m%d)
-BRANCH_NAME="upstream-sync/${UPSTREAM}-${DATE}"
+BRANCH_NAME="codex/sync-${UPSTREAM}-${DATE}"
 
 # Colors
 RED='\033[0;31m'
@@ -82,20 +82,22 @@ esac
 
 echo -e "${BLUE}==> Fetching latest from $UPSTREAM...${NC}"
 git fetch "$REMOTE" --prune
+git fetch origin codex/main
 REMOTE_BRANCH=$(remote_default_branch "$REMOTE")
 REMOTE_REF="${REMOTE}/${REMOTE_BRANCH}"
 
 echo -e "${BLUE}==> Creating review branch for $UPSTREAM (${REMOTE_REF})...${NC}"
-git switch main
+git switch codex/main
+git merge --ff-only origin/codex/main
 git switch -c "$BRANCH_NAME"
 
 echo ""
 echo -e "${GREEN}==> Commits to review:${NC}"
-git log --oneline --graph "main..${REMOTE_REF}" | head -30 || true
+git log --oneline --graph "codex/main..${REMOTE_REF}" | head -30 || true
 
 echo ""
 echo -e "${GREEN}==> File changes summary:${NC}"
-git diff --stat "main..${REMOTE_REF}"
+git diff --stat "codex/main..${REMOTE_REF}"
 
 echo ""
 echo -e "${YELLOW}==> Review branch created: $BRANCH_NAME${NC}"
@@ -117,11 +119,11 @@ echo ""
 echo "5. Test thoroughly:"
 echo "   ${GREEN}./Scripts/compile_and_run.sh${NC}"
 echo ""
-echo "6. If satisfied, merge to main:"
-echo "   ${GREEN}git checkout main && git merge $BRANCH_NAME${NC}"
+echo "6. If satisfied, merge to codex/main:"
+echo "   ${GREEN}git switch codex/main && git merge $BRANCH_NAME${NC}"
 echo ""
 echo "7. Or discard review branch:"
-echo "   ${GREEN}git checkout main && git branch -D $BRANCH_NAME${NC}"
+echo "   ${GREEN}git switch codex/main && git branch -D $BRANCH_NAME${NC}"
 echo ""
 
 # Create a review log file
@@ -129,9 +131,9 @@ LOG_FILE="upstream-review-${UPSTREAM}-${DATE}.txt"
 echo "=== Upstream Review: $UPSTREAM @ $DATE ===" > "$LOG_FILE"
 echo "" >> "$LOG_FILE"
 echo "Commits:" >> "$LOG_FILE"
-git log --oneline "main..${REMOTE_REF}" >> "$LOG_FILE"
+git log --oneline "codex/main..${REMOTE_REF}" >> "$LOG_FILE"
 echo "" >> "$LOG_FILE"
 echo "File changes:" >> "$LOG_FILE"
-git diff --stat "main..${REMOTE_REF}" >> "$LOG_FILE"
+git diff --stat "codex/main..${REMOTE_REF}" >> "$LOG_FILE"
 
 echo -e "${GREEN}Review log saved to: $LOG_FILE${NC}"

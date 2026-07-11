@@ -1,9 +1,9 @@
-name: Monitor Upstream Changes
+name: Sync and Monitor Upstream Changes
 
 on:
   schedule:
-    # Run Monday and Thursday at 9 AM UTC
-    - cron: '0 9 * * 1,4'
+    # Keep the mirror branch current each day at 9 AM UTC.
+    - cron: '0 9 * * *'
   workflow_dispatch:
     inputs:
       target:
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       issues: write
-      contents: read
+      contents: write
     
     steps:
       - name: Checkout repository
@@ -38,8 +38,23 @@ jobs:
         run: |
           git remote add upstream https://github.com/steipete/CodexBar.git || true
           git remote add quotio https://github.com/nguyenphutrong/quotio.git || true
+          git fetch origin main codex/main
           git fetch upstream
           git fetch quotio
+
+      - name: Fast-forward upstream mirror
+        run: |
+          if ! git merge-base --is-ancestor origin/main upstream/main; then
+            echo "origin/main has commits that are not in upstream/main; refusing to rewrite the mirror." >&2
+            exit 1
+          fi
+
+          if [ "$(git rev-parse origin/main)" = "$(git rev-parse upstream/main)" ]; then
+            echo "origin/main already matches upstream/main"
+          else
+            git push origin upstream/main:refs/heads/main
+            git fetch origin main
+          fi
       
       - name: Check for new commits
         id: check
@@ -72,8 +87,8 @@ jobs:
           echo "upstream_ref=$UPSTREAM_REF" >> $GITHUB_OUTPUT
           echo "quotio_ref=$QUOTIO_REF" >> $GITHUB_OUTPUT
 
-          # Count new commits in upstream
-          UPSTREAM_NEW=$(git log --oneline "main..${UPSTREAM_REF}" --no-merges 2>/dev/null | wc -l | tr -d ' ')
+          # Count upstream commits not yet integrated into the maintained branch.
+          UPSTREAM_NEW=$(git log --oneline "origin/codex/main..${UPSTREAM_REF}" --no-merges 2>/dev/null | wc -l | tr -d ' ')
           echo "upstream_commits=$UPSTREAM_NEW" >> $GITHUB_OUTPUT
           
           # Count new commits in quotio (last 7 days)
@@ -82,7 +97,7 @@ jobs:
           
           # Get commit summaries
           echo "upstream_summary<<EOF" >> $GITHUB_OUTPUT
-          git log --oneline "main..${UPSTREAM_REF}" --no-merges 2>/dev/null | head -10 >> $GITHUB_OUTPUT || echo "No commits" >> $GITHUB_OUTPUT
+          git log --oneline "origin/codex/main..${UPSTREAM_REF}" --no-merges 2>/dev/null | head -10 >> $GITHUB_OUTPUT || echo "No commits" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
           echo "quotio_summary<<EOF" >> $GITHUB_OUTPUT
