@@ -37,6 +37,8 @@ extension UsageStore {
     func activateCachedTokenAccountSnapshot(provider: UsageProvider, accountID: UUID) {
         self.knownLimitsAvailabilityByProvider.removeValue(forKey: provider)
         guard let cached = self.accountSnapshots[provider]?.first(where: { $0.account.id == accountID }) else {
+            // Never show the previous account's usage under the newly selected account. Segmented layouts only
+            // fetch the active account, so an uncached selection must render as refreshing until its fetch completes.
             self.snapshots.removeValue(forKey: provider)
             self.errors.removeValue(forKey: provider)
             self.lastSourceLabels.removeValue(forKey: provider)
@@ -57,6 +59,26 @@ extension UsageStore {
         } else {
             self.lastSourceLabels.removeValue(forKey: provider)
         }
+    }
+
+    func cacheTokenAccountSnapshot(
+        provider: UsageProvider,
+        account: ProviderTokenAccount,
+        snapshot: UsageSnapshot,
+        sourceLabel: String?)
+    {
+        let cached = TokenAccountUsageSnapshot(
+            account: account,
+            snapshot: snapshot,
+            error: nil,
+            sourceLabel: sourceLabel)
+        var snapshots = self.accountSnapshots[provider] ?? []
+        if let index = snapshots.firstIndex(where: { $0.account.id == account.id }) {
+            snapshots[index] = cached
+        } else {
+            snapshots.append(cached)
+        }
+        self.accountSnapshots[provider] = snapshots
     }
 }
 
